@@ -8,6 +8,7 @@ import torch
 import torch.optim as optim
 import torch.nn as nn
 import torch.nn.functional as F
+import tqdm
 
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")  # Configuring Pytorch
 from collections import namedtuple, deque
@@ -189,10 +190,10 @@ class CartpoleAgent():
         steps = 0
         stack_frames = FrameStacking(env, self.k) #define frame stacking framework
 
-        for i_episode in range(self.num_episodes):
+        for i_episode in tqdm.tqdm(range(self.num_episodes)):
             rewards = 0
-            if i_episode % 20 == 0:
-                print("episode ", i_episode, "/", self.num_episodes)
+            #if i_episode % 20 == 0:
+            #    print("episode ", i_episode, "/", self.num_episodes)
 
             env.reset() #reset environment
             state = torch.tensor(env.state).float().unsqueeze(0).to(device)
@@ -251,7 +252,7 @@ class CartpoleAgent():
         env.close() #close environment
 
 
-    def predict(self):
+    def test(self):
         """run an episode with trained agent and record video"""
 
         env = gym.make("CartPole-v1")
@@ -287,6 +288,13 @@ class CartpoleAgent():
 
         print("Episode duration: ", duration)
 
+    def tune_params(self):
+        """"""
+        pass
+
+    def save_fig(self):
+        """"""
+        pass
     
     def plot_rewards(self):
         """Plot the total non-discounted sum of rewards across the episodes (i.e duration of each episode in steps)."""
@@ -295,18 +303,46 @@ class CartpoleAgent():
         plt.figure()
         plt.grid()
         plt.plot(epochs, self.train_rewards, label="Total Non-Discounted Rewards")
-        plt.axhline(y=self.reward_target, color='r', linestyle='-', label="Reward target")
+        plt.axhline(y=self.reward_target, color='black', linestyle='-', label="Reward target")
         #plt.plot(epochs, rewards_list, "b.", markersize=3)
         #plt.plot(epochs, np.poly1d(np.polyfit(epochs, rewards_list, 1))(epochs), "r")
         plt.xlabel("Episodes")
         plt.ylabel("Total Non-Discounted Reward")
-        plt.legend(loc="lower right")
+        plt.legend(loc="upper left")
         plt.show()
-    
-    def plot_replications(self):
-        """"""
-        pass
 
+def plot_replications(mean_rewards, std_rewards):
+    """"""
+    episodes = np.arange(len(mean_rewards))
+
+    plt.figure(figsize=(20,20))
+    plt.grid()
+    plt.plot(episodes, mean_rewards, "b", label="Mean")
+    plt.fill_between(episodes, mean_rewards-std_rewards, mean_rewards+std_rewards, color="b", alpha=0.4, label=r"$\sigma$")
+    plt.xlabel("Episode")
+    plt.ylabel("Mean Total Non-Discounted \nReward")
+    plt.legend(loc="upper left")
+    plt.show();
+    
+
+def replicate_CPAgent(N_REPLICATIONS,NUM_EPISODES, BATCH_SIZE, GAMMA, TARGET_UPDATE_FREQ, 
+                      NUM_FRAMES, NUM_HIDDEN_LAYERS, SIZE_HIDDEN_LAYERS, 
+                      REPLAY_BUFFER, LR, EPS_START, EPS_END, EPS_DECAY, REWARD_TARGET):
+    """"""
+    replication_rewards = []
+    for i in range(N_REPLICATIONS):
+        print(f"Replication {i+1}")
+        CP_agent = CartpoleAgent(NUM_EPISODES, BATCH_SIZE, GAMMA, TARGET_UPDATE_FREQ, 
+                                 NUM_FRAMES, NUM_HIDDEN_LAYERS, SIZE_HIDDEN_LAYERS, 
+                                 REPLAY_BUFFER, LR, EPS_START, EPS_END, EPS_DECAY, REWARD_TARGET)
+    
+        CP_agent.train() #train agent
+        replication_rewards.append(CP_agent.train_rewards)
+
+    mean_rewards = np.mean(np.array(replication_rewards), axis=0)
+    std_rewards = np.std(np.array(replication_rewards), axis=0)
+
+    return mean_rewards, std_rewards
     
 
 if __name__ == "__main__":
@@ -315,20 +351,27 @@ if __name__ == "__main__":
     BATCH_SIZE = 32
     GAMMA = 1.0
     TARGET_UPDATE_FREQ = 10
-    NUM_FRAMES = 3
+    NUM_FRAMES = 2
     NUM_HIDDEN_LAYERS = 2
     SIZE_HIDDEN_LAYERS = 150
-    REPLAY_BUFFER = 20000
+    REPLAY_BUFFER = 40000
     LR = 0.0001
     EPS_START = 1.0
     EPS_END = 0.01
     EPS_DECAY = 200
     REWARD_TARGET = 200
 
-    CP_agent = CartpoleAgent(NUM_EPISODES, BATCH_SIZE, GAMMA, TARGET_UPDATE_FREQ, 
-                             NUM_FRAMES, NUM_HIDDEN_LAYERS, SIZE_HIDDEN_LAYERS, 
-                             REPLAY_BUFFER, LR, EPS_START, EPS_END, EPS_DECAY, REWARD_TARGET)
+    #CP_agent = CartpoleAgent(NUM_EPISODES, BATCH_SIZE, GAMMA, TARGET_UPDATE_FREQ, 
+    #                         NUM_FRAMES, NUM_HIDDEN_LAYERS, SIZE_HIDDEN_LAYERS, 
+    #                        REPLAY_BUFFER, LR, EPS_START, EPS_END, EPS_DECAY, REWARD_TARGET)
     
-    CP_agent.train()
-    CP_agent.plot_rewards()
-    CP_agent.predict()
+    #CP_agent.train()
+    #CP_agent.plot_rewards()
+    #CP_agent.test()
+
+    N_REPLICATIONS = 20
+    mean_rewards, std_rewards = replicate_CPAgent(N_REPLICATIONS,NUM_EPISODES, BATCH_SIZE, GAMMA, TARGET_UPDATE_FREQ, 
+                                                  NUM_FRAMES, NUM_HIDDEN_LAYERS, SIZE_HIDDEN_LAYERS, 
+                                                  REPLAY_BUFFER, LR, EPS_START, EPS_END, EPS_DECAY, REWARD_TARGET)
+
+    plot_replications(mean_rewards, std_rewards)
