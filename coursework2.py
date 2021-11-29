@@ -73,7 +73,7 @@ class CartpoleAgent():
     def __init__(self, NUM_EPISODES, BATCH_SIZE, GAMMA, TARGET_UPDATE_FREQ, 
                  NUM_FRAMES, SKIPPED_FRAMES, NUM_HIDDEN_LAYERS, SIZE_HIDDEN_LAYERS, REPLAY_BUFFER, LR,
                  EPS_START, EPS_END, REWARD_TARGET, EPS_DECAY=None, DDQN=False, eps_decay_strat="reward",
-                 ablate_target=False, ablate_replay=False, random=False):
+                 ablate_target=False, ablate_replay=False):
 
         #initialisation attributes
         self.reward_target = REWARD_TARGET
@@ -90,7 +90,6 @@ class CartpoleAgent():
         self.losses = []
         self.train_rewards = []
         self.eps_decay_strat = eps_decay_strat
-        self.random = random
 
         self.ablate_target = ablate_target
         self.ablate_replay = ablate_replay
@@ -129,21 +128,16 @@ class CartpoleAgent():
 
     def select_action(self, k_states):
         """"""
-        if not self.random:
-            sample = random.random()
-            if sample > self.epsilon:
-                with torch.no_grad():
-                    # t.max(1) will return largest column value of each row.
-                    # second column on max result is index of where max element was
-                    # found, so we pick action with the larger expected reward.
-                    return self.policy_net(k_states).max(1)[1].view(1, 1)
-            else:
-                return torch.tensor([[random.randrange(self.n_actions)]], device=device, dtype=torch.long)
-
+        sample = random.random()
+        if sample > self.epsilon:
+            with torch.no_grad():
+                # t.max(1) will return largest column value of each row.
+                # second column on max result is index of where max element was
+                # found, so we pick action with the larger expected reward.
+                return self.policy_net(k_states).max(1)[1].view(1, 1)
         else:
             return torch.tensor([[random.randrange(self.n_actions)]], device=device, dtype=torch.long)
     
-
 
     def optimize_model(self):
         if len(self.memory) < self.batch_size:
@@ -185,10 +179,10 @@ class CartpoleAgent():
             # Once again can omit the condition if batch size is large enough
             if sum(non_final_mask) > 0:
                 if self.DDQN:
-                    #DDQN ---> update next states Q values (using policy net) using the actions that maximise the target network
+                    #DDQN ---> update next states Q values (using target net) using the actions that maximise the policy network
                     actions_non_final = torch.zeros_like(action_batch.view(non_final_mask.shape))
-                    actions_non_final = torch.argmax(self.target_net(non_final_next_states), 1).unsqueeze(1)
-                    next_state_values[non_final_mask] = self.policy_net(non_final_next_states).gather(1, actions_non_final).flatten()
+                    actions_non_final = torch.argmax(self.policy_net(non_final_next_states), 1).unsqueeze(1)
+                    next_state_values[non_final_mask] = self.target_net(non_final_next_states).gather(1, actions_non_final).flatten()
                 else:
                     if self.ablate_target:
                         next_state_values[non_final_mask] = self.policy_net(non_final_next_states).max(1)[0].detach()
@@ -450,30 +444,24 @@ def plot_replications(mean_rewards, std_rewards, mean_epsilons=None, std_epsilon
 
 if __name__ == "__main__":
     #define hyperparameters for agent
-    NUM_EPISODES = 500
+    NUM_EPISODES = 700
     BATCH_SIZE = 128
     GAMMA = 1.0
     TARGET_UPDATE_FREQ = 40
     NUM_FRAMES = 4
-    SKIPPED_FRAMES = 1
+    SKIPPED_FRAMES = 4
     NUM_HIDDEN_LAYERS = 2
     SIZE_HIDDEN_LAYERS = 150
-    REPLAY_BUFFER = 10000
+    REPLAY_BUFFER = 100000
     LR = 0.0001
     EPS_START = 1.0 
     EPS_END = 0.0005
     REWARD_TARGET = 100
 
-    #CP_agent = CartpoleAgent(NUM_EPISODES, BATCH_SIZE, GAMMA, TARGET_UPDATE_FREQ, 
-    #                         NUM_FRAMES,SKIPPED_FRAMES, NUM_HIDDEN_LAYERS, SIZE_HIDDEN_LAYERS, 
-    #                        REPLAY_BUFFER, LR, EPS_START, EPS_END, REWARD_TARGET, random=True)
+    CP_agent = CartpoleAgent(NUM_EPISODES, BATCH_SIZE, GAMMA, TARGET_UPDATE_FREQ, 
+                             NUM_FRAMES,SKIPPED_FRAMES, NUM_HIDDEN_LAYERS, SIZE_HIDDEN_LAYERS, 
+                            REPLAY_BUFFER, LR, EPS_START, EPS_END, REWARD_TARGET)
     
-    #CP_agent.train()
-    #CP_agent.plot_rewards()
-    N_REPLICATIONS = 6
-    mean_rewards, std_rewards = replicate_CPAgent(N_REPLICATIONS,NUM_EPISODES, BATCH_SIZE, GAMMA, TARGET_UPDATE_FREQ, 
-                      NUM_FRAMES, SKIPPED_FRAMES, NUM_HIDDEN_LAYERS, SIZE_HIDDEN_LAYERS, 
-                      REPLAY_BUFFER, LR, EPS_START, EPS_END, REWARD_TARGET)
-    
-    print(np.mean(mean_rewards))
-    #print(np.mean(CP_agent.train_rewards))
+    CP_agent.train()
+    CP_agent.plot_rewards()
+
