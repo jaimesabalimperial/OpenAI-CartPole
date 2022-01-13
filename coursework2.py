@@ -444,7 +444,7 @@ def plot_replications(mean_rewards, std_rewards, mean_epsilons=None, std_epsilon
 
 if __name__ == "__main__":
     #define hyperparameters for agent
-    NUM_EPISODES = 700
+    NUM_EPISODES = 200
     BATCH_SIZE = 128
     GAMMA = 1.0
     TARGET_UPDATE_FREQ = 40
